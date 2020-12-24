@@ -31,7 +31,7 @@ const checkResultMessageTemplate = (result) => `check-runs was ${result}.`;
 const getLogger = (id) => (msg) => console.log(`[${id}]: ${msg}`);
 const getAdminMessage = (id) => `An unexpected error has occurred, could you please contact admins. Your RequestID: ${id}`;
 
-export function checkYFM(request) {
+const checkYFM = (request) => {
     console.log(request.requestId);
     const source = '/tmp/source';
     const inputDir = `${source}/input`;
@@ -113,3 +113,72 @@ export function checkYFM(request) {
     //     body: 'Ok',
     // };
 }
+
+function getAdditionalCheckParameters(type, requestID) {
+    switch (type) {
+        case conclusionTypes.success:
+            return {
+                conclusion: conclusionTypes.success,
+            };
+        case conclusionTypes.failure:
+            return {
+                conclusion: conclusionTypes.failure,
+                output: {
+                    title: 'More information',
+                    summary: `If you got unexpected behavior could you please contact admins. Your RequestID: ${requestID}`,
+                },
+            };
+        default:
+            return Object();
+    }
+}
+
+function getAddCheckResult(createCheckRuns, createComments, logger) {
+    return async (consoleLog, checkResultMessage, ...args) => {
+        const stdout = reformatOutput(consoleLog);
+
+        await createCheckRuns('completed', ...args);
+        logger(checkResultMessage);
+
+        await createComments(stdout);
+        logger('comment was created successfully.');
+    };
+}
+
+function getCreateCheckRuns(appOctokit, owner, repo, name, headSHA) {
+    return async (status, ...args) => {
+        const parameters = Object.assign({
+            owner,
+            repo,
+            name,
+            head_sha: headSHA,
+            status,
+        }, ...args);
+        return appOctokit.request('POST /repos/{owner}/{repo}/check-runs', parameters);
+    };
+}
+
+function getCreateComments(octokit, owner, repo, issueId) {
+    return async (body) => {
+        await octokit.request(
+            'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+            { owner, repo, issue_number: issueId, body: JSON.stringify(body) });
+    };
+}
+
+function getAppAuth() {
+    const appOctokit = new Octokit({
+        authStrategy: createAppAuth,
+        auth: {
+            appId,
+            privateKey,
+            installationId,
+        },
+    });
+
+    const octokit = new Octokit({ auth: token });
+
+    return [appOctokit, octokit];
+}
+
+export default checkYFM;
