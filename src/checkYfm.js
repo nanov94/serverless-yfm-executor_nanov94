@@ -31,7 +31,7 @@ const checkResultMessageTemplate = (result) => `check-runs was ${result}.`;
 const getLogger = (id) => (msg) => console.log(`[${id}]: ${msg}`);
 const getAdminMessage = (id) => `An unexpected error has occurred, could you please contact admins. Your RequestID: ${id}`;
 
-const checkYFM = (request) => {
+const checkYFM = async (request) => {
     console.log(request.requestId);
     const source = '/tmp/source';
     const inputDir = `${source}/input`;
@@ -181,4 +181,4 @@ function getAppAuth() {
     return [appOctokit, octokit];
 }
 
-export default checkYFM;
+module.exports = checkYFM;
