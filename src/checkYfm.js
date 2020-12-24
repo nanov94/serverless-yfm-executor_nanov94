@@ -7,7 +7,7 @@ const exec = util.promisify(require('child_process').exec);
 const { Octokit } = require('@octokit/core');
 const { createAppAuth } = require('@octokit/auth-app');
 
-const { s3, yfmStorage } = require('./configs');
+const { s3, yfmStorage, github } = require('./configs');
 
 const reformatOutput = (stdout) => {
     return (typeof stdout !== 'string')
@@ -167,6 +167,7 @@ function getCreateComments(octokit, owner, repo, issueId) {
 }
 
 function getAppAuth() {
+    const { appId, privateKey, installationId, token } = github;
     const appOctokit = new Octokit({
         authStrategy: createAppAuth,
         auth: {
