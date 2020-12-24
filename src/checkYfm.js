@@ -7,29 +7,15 @@ const exec = util.promisify(require('child_process').exec);
 const { Octokit } = require('@octokit/core');
 const { createAppAuth } = require('@octokit/auth-app');
 
-const { s3, yfmStorage, github } = require('./configs');
-
-const reformatOutput = (stdout) => {
-    return (typeof stdout !== 'string')
-        ? stdout
-        : stdout
-            .match(/^(?!(PROC|COPY|\n)).*/gm)
-            .join('\n')
-            .replace(/\u001B\[33m/gi, '&#x1F536;')
-            .replace(/\u001B\[39m/gi, '')
-            .replace(/\u001B\[31m/gi, '&#x1F534;')
-            .replace(/(\u001B\[1m)|(\u001B\[22m)/gi, '**')
-            .replace(/\n\nBuild time: \d*.*\d*(ms|s)/, '');
-};
-
-const conclusionTypes = {
-    success: 'success',
-    failure: 'failure',
-};
-
-const checkResultMessageTemplate = (result) => `check-runs was ${result}.`;
-const getLogger = (id) => (msg) => console.log(`[${id}]: ${msg}`);
-const getAdminMessage = (id) => `An unexpected error has occurred, could you please contact admins. Your RequestID: ${id}`;
+const { s3, yfmStorage, github, catalog } = require('./configs');
+const {
+    reformatOutput,
+    conclusionTypes,
+    checkResultMessageTemplate,
+    getLogger,
+    getAdminMessage,
+    getBucketUrl,
+} = require('./constants');
 
 const checkYFM = async (request) => {
     console.log(request.requestId);
@@ -74,15 +60,17 @@ const checkYFM = async (request) => {
             logger('Cloning was finished');
 
             logger('YFM was started');
+            const prefix = `${yfmStorage.prefix}${requestID}`;
             const { stdout } = await exec(`
                 export YFM_STORAGE_KEY_ID=${yfmStorage.keyId};
                 export YFM_STORAGE_SECRET_KEY=${yfmStorage.secretKey};
-                export YFM_STORAGE_PREFIX=${yfmStorage.prefix}${requestID};
+                export YFM_STORAGE_PREFIX=${prefix};
                 export S3_ACCESS_KEY_ID=${s3.accessKeyId};
                 export S3_SECRET_ACCESS_KEY=${s3.secretAccessKey};
                 npx yfm -i ${inputDir} -o ${outputDir} -q --publish --storageBucket=${s3.bucket} --storageEndpoint=${s3.endpoint}`);
             logger('YFM was finished');
 
+            await createComments(getBucketUrl(catalog.folderId, s3.bucket, prefix));
             await addCheckResult(
                 stdout,
                 checkResultMessageTemplate('completed successfully'),
@@ -100,18 +88,7 @@ const checkYFM = async (request) => {
         }
     } catch (error) {
         logger(`Error has occurred. ${error}`);
-
-
-        // return {
-        //     statusCode: 500,
-        //     body: JSON.stringify(error),
-        // };
     }
-
-    // return {
-    //     statusCode: 200,
-    //     body: 'Ok',
-    // };
 }
 
 function getAdditionalCheckParameters(type, requestID) {
